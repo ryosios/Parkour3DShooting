@@ -5,6 +5,34 @@
 # Recommended: add any editor/OS/tool-specific ignore rules from the Global/ templates as needed.
 # See: https://github.com/github/gitignore/tree/main/Global
 #
+
+# Unity project lives one directory below the repository root.
+/Parkour3DShootingGame/[Ll]ibrary/
+/Parkour3DShootingGame/[Tt]emp/
+/Parkour3DShootingGame/[Oo]bj/
+/Parkour3DShootingGame/[Bb]uild/
+/Parkour3DShootingGame/[Bb]uilds/
+/Parkour3DShootingGame/[Ll]ogs/
+/Parkour3DShootingGame/[Uu]ser[Ss]ettings/
+/Parkour3DShootingGame/[Mm]emoryCaptures/
+/Parkour3DShootingGame/[Rr]ecordings/
+/Parkour3DShootingGame/ServerData
+/Parkour3DShootingGame/[Aa]ssets/StreamingAssets/aa*
+/Parkour3DShootingGame/[Aa]ssets/AddressableAssetsData/link.xml*
+/Parkour3DShootingGame/[Aa]ssets/AddressableAssetsData/link.xml.meta
+/Parkour3DShootingGame/[Aa]ssets/Addressables_Temp*
+/Parkour3DShootingGame/[Aa]ssets/AddressableAssetsData/*/*.bin*
+/Parkour3DShootingGame/[Aa]ssets/Unity.VisualScripting.Generated/VisualScripting.Flow/UnitOptions.db
+/Parkour3DShootingGame/[Aa]ssets/Unity.VisualScripting.Generated/VisualScripting.Flow/UnitOptions.db.meta
+/Parkour3DShootingGame/[Aa]ssets/Unity.VisualScripting.Generated/VisualScripting.Core/Property Providers
+/Parkour3DShootingGame/[Aa]ssets/Unity.VisualScripting.Generated/VisualScripting.Core/Property Providers.meta
+/Parkour3DShootingGame/[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
+/Parkour3DShootingGame/[Aa]ssets/[Ss]ceneDependencyCache*
+
+# Imported package samples are not needed for this game project.
+/Parkour3DShootingGame/[Aa]ssets/Plugins/UniRx/Examples/
+/Parkour3DShootingGame/[Aa]ssets/Plugins/UniRx/Examples.meta
+
 .utmp/
 /[Ll]ibrary/
 /[Tt]emp/
