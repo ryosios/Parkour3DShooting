@@ -6,6 +6,7 @@ using Parkour3DShooting.Player;
 using Parkour3DShooting.Stage;
 using Parkour3DShooting.UI;
 using Unity.Cinemachine;
+using Unity.Cinemachine.TargetTracking;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -14,13 +15,25 @@ using UnityEngine.UI;
 
 namespace Parkour3DShooting.Editor
 {
+    /// <summary>
+    /// MVPシーン、ステージ、プレイヤー、ボス、UI、カメラをエディタ上で自動生成する補助クラスです。
+    /// </summary>
     public static class SceneBootstrapper
     {
+        /// <summary>自動生成するメインシーンの保存先です。</summary>
         private const string MainScenePath = "Assets/Scenes/MainScene.unity";
+        /// <summary>自動生成する弾プレハブの保存先です。</summary>
         private const string ProjectilePrefabPath = "Assets/Prefabs/Projectiles/Projectile.prefab";
-        private static readonly Vector3 FollowCameraOffset = new Vector3(0f, 3.2f, -7.5f);
+        /// <summary>Cinemachineとフォールバックカメラで使う追従オフセットです。</summary>
+        private static readonly Vector3 FollowCameraOffset = new Vector3(0f, 1f, -7f);
+        /// <summary>フォールバックカメラがプレイヤーを見る高さです。</summary>
         private const float FollowCameraLookHeight = 1.4f;
+        /// <summary>カメラが追う安定ターゲットの名前です。</summary>
+        private const string CameraTargetName = "PlayerCameraTarget";
 
+        /// <summary>
+        /// MVP用のメインシーンを空シーンから構築し、ビルド対象にも登録します。
+        /// </summary>
         [MenuItem("Parkour3DShooting/Build MVP Scene")]
         public static void BuildMvpScene()
         {
@@ -67,6 +80,9 @@ namespace Parkour3DShooting.Editor
             Debug.Log($"MVP scene generated: {MainScenePath}");
         }
 
+        /// <summary>
+        /// 生成に必要なAssets配下のフォルダーを作成します。
+        /// </summary>
         private static void EnsureProjectFolders()
         {
             EnsureFolder("Assets", "Scripts");
@@ -86,6 +102,9 @@ namespace Parkour3DShooting.Editor
             EnsureFolder("Assets", "Materials");
         }
 
+        /// <summary>
+        /// 指定フォルダーが存在しなければ作成します。
+        /// </summary>
         private static void EnsureFolder(string parent, string child)
         {
             string path = $"{parent}/{child}";
@@ -95,6 +114,9 @@ namespace Parkour3DShooting.Editor
             }
         }
 
+        /// <summary>
+        /// 弾プレハブを取得または新規生成します。
+        /// </summary>
         private static Projectile CreateProjectilePrefab()
         {
             Projectile existing = AssetDatabase.LoadAssetAtPath<Projectile>(ProjectilePrefabPath);
@@ -119,6 +141,9 @@ namespace Parkour3DShooting.Editor
             return prefab.GetComponent<Projectile>();
         }
 
+        /// <summary>
+        /// プレイヤー本体、CharacterController、射撃位置、PlayerControllerを生成します。
+        /// </summary>
         private static PlayerController CreatePlayer(Projectile projectilePrefab)
         {
             GameObject playerObject = GameObject.CreatePrimitive(PrimitiveType.Capsule);
@@ -142,6 +167,9 @@ namespace Parkour3DShooting.Editor
             return player;
         }
 
+        /// <summary>
+        /// ボス本体、射撃位置、BossControllerを生成します。
+        /// </summary>
         private static BossController CreateBoss(Transform player, Projectile projectilePrefab)
         {
             GameObject bossObject = GameObject.CreatePrimitive(PrimitiveType.Sphere);
@@ -164,6 +192,9 @@ namespace Parkour3DShooting.Editor
             return boss;
         }
 
+        /// <summary>
+        /// ビル群、屋上ルート、橋、障害物、壁グレイズを生成します。
+        /// </summary>
         private static void CreateStage(Transform buildingRoot, Transform obstacleRoot, Transform grazeRoot)
         {
             GameObject chasmFloor = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -246,22 +277,80 @@ namespace Parkour3DShooting.Editor
                 obstacle.transform.SetParent(obstacleRoot);
             }
 
-            for (int i = 0; i < 12; i++)
+            CreateWallGrazeTriggers(grazeRoot, roofPositions, roofScales);
+        }
+
+        /// <summary>
+        /// 建物の側面に壁走り用グレイズトリガーを配置します。
+        /// </summary>
+        private static void CreateWallGrazeTriggers(Transform grazeRoot, Vector3[] roofPositions, Vector3[] roofScales)
+        {
+            for (int i = 0; i < 6; i++)
             {
-                Vector3 a = roofPositions[Mathf.Min(i / 2, roofPositions.Length - 1)];
-                Vector3 b = roofPositions[Mathf.Min(i / 2 + 1, roofPositions.Length - 1)];
-                Vector3 mid = Vector3.Lerp(a, b, i % 2 == 0 ? 0.35f : 0.68f);
-                GameObject graze = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-                graze.name = $"AirGraze_{i:00}";
-                graze.transform.position = new Vector3(mid.x + (i % 2 == 0 ? 2.4f : -2.4f), Mathf.Max(a.y, b.y) + 8f, mid.z);
-                graze.transform.localScale = new Vector3(0.7f, 0.2f, 0.7f);
-                graze.GetComponent<Renderer>().sharedMaterial = CreateMaterial("GrazeMat", new Color(0.35f, 1f, 0.45f));
-                graze.GetComponent<Collider>().isTrigger = true;
-                graze.AddComponent<GrazeTrigger>();
-                graze.transform.SetParent(grazeRoot);
+                Vector3 roof = roofPositions[Mathf.Min(i + 1, roofPositions.Length - 1)];
+                Vector3 scale = roofScales[Mathf.Min(i + 1, roofScales.Length - 1)];
+                GameObject wallGraze = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                wallGraze.name = $"WallGraze_{i:00}";
+                float side = i % 2 == 0 ? -1f : 1f;
+                float visualThickness = 0.3f;
+                float detectionThickness = 3.6f;
+                wallGraze.transform.position = new Vector3(roof.x + side * (scale.x * 0.5f + 0.15f), roof.y + scale.y * 0.5f - 1.6f, roof.z);
+                wallGraze.transform.localScale = new Vector3(visualThickness, 3.2f, scale.z * 0.7f);
+                wallGraze.GetComponent<Renderer>().sharedMaterial = CreateMaterial("GrazeMat", new Color(0.35f, 1f, 0.45f));
+                BoxCollider wallCollider = wallGraze.GetComponent<BoxCollider>();
+                wallCollider.isTrigger = true;
+                wallCollider.size = new Vector3(detectionThickness / visualThickness, 1f, 1f);
+                wallCollider.center = new Vector3(side * ((detectionThickness * 0.5f - 0.05f) - 0.15f) / visualThickness, 0f, 0f);
+                GrazeTrigger grazeTrigger = wallGraze.AddComponent<GrazeTrigger>();
+                grazeTrigger.ConfigureWallRunDetection(-side * 0.5f, detectionThickness);
+                wallGraze.transform.SetParent(grazeRoot);
             }
         }
 
+        /// <summary>
+        /// 既存シーンのGrazeRootだけを壁グレイズ配置で更新します。
+        /// </summary>
+        [MenuItem("Parkour3DShooting/Update Graze Walls Only")]
+        public static void UpdateGrazeWallsOnly()
+        {
+            Scene scene = EditorSceneManager.OpenScene(MainScenePath, OpenSceneMode.Single);
+            GameObject grazeRootObject = GameObject.Find("GrazeRoot");
+            if (grazeRootObject == null)
+            {
+                Debug.LogError("GrazeRoot was not found.");
+                return;
+            }
+
+            Transform grazeRoot = grazeRootObject.transform;
+            for (int i = grazeRoot.childCount - 1; i >= 0; i--)
+            {
+                Object.DestroyImmediate(grazeRoot.GetChild(i).gameObject);
+            }
+
+            Vector3[] roofPositions = new Vector3[8];
+            Vector3[] roofScales = new Vector3[8];
+            for (int i = 0; i < roofPositions.Length; i++)
+            {
+                GameObject roof = GameObject.Find($"RoofRouteBlock_{i:00}");
+                if (roof == null)
+                {
+                    Debug.LogError($"RoofRouteBlock_{i:00} was not found.");
+                    return;
+                }
+
+                roofPositions[i] = roof.transform.position;
+                roofScales[i] = roof.transform.localScale;
+            }
+
+            CreateWallGrazeTriggers(grazeRoot, roofPositions, roofScales);
+            EditorSceneManager.SaveScene(scene);
+            AssetDatabase.SaveAssets();
+            Debug.Log("Graze triggers updated to wall-only placement.");
+        }
+
+        /// <summary>
+        /// 建物用の直方体を生成して指定親へ配置します。
+        /// </summary>
         private static GameObject CreateBuilding(Transform parent, Vector3 position, Vector3 scale)
         {
             GameObject building = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -273,6 +362,9 @@ namespace Parkour3DShooting.Editor
             return building;
         }
 
+        /// <summary>
+        /// シーン用の平行光源を生成します。
+        /// </summary>
         private static void CreateLighting()
         {
             GameObject lightObject = new GameObject("Directional Light");
@@ -282,9 +374,13 @@ namespace Parkour3DShooting.Editor
             lightObject.transform.rotation = Quaternion.Euler(45f, -35f, 0f);
         }
 
+        /// <summary>
+        /// メインカメラ、Cinemachineカメラ、フォールバック追従リグを生成します。
+        /// </summary>
         private static void CreateCamera(Transform player)
         {
             GameObject cameraRoot = new GameObject("CameraRoot");
+            Transform cameraTarget = CreateStableCameraTarget(cameraRoot.transform, player);
 
             GameObject mainCameraObject = new GameObject("Main Camera");
             mainCameraObject.tag = "MainCamera";
@@ -298,16 +394,87 @@ namespace Parkour3DShooting.Editor
             followCameraObject.transform.SetParent(cameraRoot.transform);
             followCameraObject.transform.position = player.position + FollowCameraOffset;
             CinemachineCamera virtualCamera = followCameraObject.AddComponent<CinemachineCamera>();
-            virtualCamera.Follow = player;
-            virtualCamera.LookAt = player;
+            virtualCamera.Follow = cameraTarget;
+            virtualCamera.LookAt = cameraTarget;
             CinemachineFollow follow = followCameraObject.AddComponent<CinemachineFollow>();
             follow.FollowOffset = FollowCameraOffset;
-            followCameraObject.AddComponent<CinemachineHardLookAt>();
+            follow.TrackerSettings.BindingMode = BindingMode.WorldSpace;
+            CinemachineHardLookAt hardLookAt = followCameraObject.AddComponent<CinemachineHardLookAt>();
+            hardLookAt.LookAtOffset = new Vector3(0f, 0f, 90f);
 
             CameraFollowRig fallbackRig = followCameraObject.AddComponent<CameraFollowRig>();
-            fallbackRig.Configure(player, FollowCameraOffset, FollowCameraLookHeight);
+            fallbackRig.Configure(cameraTarget, FollowCameraOffset, FollowCameraLookHeight);
         }
 
+        /// <summary>
+        /// プレイヤーの回転に影響されないカメラ追従ターゲットを生成します。
+        /// </summary>
+        private static Transform CreateStableCameraTarget(Transform parent, Transform player)
+        {
+            GameObject targetObject = new GameObject(CameraTargetName);
+            targetObject.transform.SetParent(parent);
+            StableCameraTarget stableTarget = targetObject.AddComponent<StableCameraTarget>();
+            stableTarget.Configure(player, Vector3.zero);
+            return targetObject.transform;
+        }
+
+        /// <summary>
+        /// 既存シーンのCinemachine参照を、安定カメラターゲットへ更新します。
+        /// </summary>
+        [MenuItem("Parkour3DShooting/Update Camera Stable Target")]
+        public static void UpdateCameraStableTarget()
+        {
+            Scene scene = EditorSceneManager.OpenScene(MainScenePath, OpenSceneMode.Single);
+            GameObject playerObject = GameObject.Find("Player");
+            GameObject followCameraObject = GameObject.Find("Cinemachine Follow Camera");
+            GameObject cameraRootObject = GameObject.Find("CameraRoot");
+            if (playerObject == null || followCameraObject == null || cameraRootObject == null)
+            {
+                Debug.LogError("Player, Cinemachine Follow Camera, or CameraRoot was not found.");
+                return;
+            }
+
+            GameObject targetObject = GameObject.Find(CameraTargetName);
+            if (targetObject == null)
+            {
+                targetObject = new GameObject(CameraTargetName);
+                targetObject.transform.SetParent(cameraRootObject.transform);
+            }
+
+            StableCameraTarget stableTarget = targetObject.GetComponent<StableCameraTarget>();
+            if (stableTarget == null)
+            {
+                stableTarget = targetObject.AddComponent<StableCameraTarget>();
+            }
+
+            stableTarget.Configure(playerObject.transform, Vector3.zero);
+            CinemachineCamera virtualCamera = followCameraObject.GetComponent<CinemachineCamera>();
+            if (virtualCamera != null)
+            {
+                virtualCamera.Follow = targetObject.transform;
+                virtualCamera.LookAt = targetObject.transform;
+            }
+
+            CinemachineFollow follow = followCameraObject.GetComponent<CinemachineFollow>();
+            if (follow != null)
+            {
+                follow.TrackerSettings.BindingMode = BindingMode.WorldSpace;
+            }
+
+            CameraFollowRig fallbackRig = followCameraObject.GetComponent<CameraFollowRig>();
+            if (fallbackRig != null)
+            {
+                fallbackRig.Configure(targetObject.transform, FollowCameraOffset, FollowCameraLookHeight);
+            }
+
+            EditorSceneManager.SaveScene(scene);
+            AssetDatabase.SaveAssets();
+            Debug.Log("Camera target updated to stable player target.");
+        }
+
+        /// <summary>
+        /// HP、スコア、リザルトのUI一式を生成します。
+        /// </summary>
         private static void CreateUi(PlayerController player, out ResultView resultView, out HpView hpView, out ScoreView scoreView)
         {
             GameObject canvasObject = new GameObject("Canvas");
@@ -346,6 +513,9 @@ namespace Parkour3DShooting.Editor
             resultView.HideImmediate();
         }
 
+        /// <summary>
+        /// Unity標準UI Textを指定位置と整列で生成します。
+        /// </summary>
         private static Text CreateText(string name, Transform parent, Vector2 anchoredPosition, TextAnchor alignment, string text, int fontSize)
         {
             GameObject textObject = new GameObject(name);
@@ -366,6 +536,9 @@ namespace Parkour3DShooting.Editor
             return uiText;
         }
 
+        /// <summary>
+        /// TextAnchorに対応するRectTransformのアンカー位置を返します。
+        /// </summary>
         private static Vector2 AlignmentToAnchor(TextAnchor alignment)
         {
             switch (alignment)
@@ -379,12 +552,18 @@ namespace Parkour3DShooting.Editor
             }
         }
 
+        /// <summary>
+        /// Unity環境で利用可能な組み込みフォントを取得します。
+        /// </summary>
         private static Font GetBuiltinFont()
         {
             Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             return font != null ? font : Resources.GetBuiltinResource<Font>("Arial.ttf");
         }
 
+        /// <summary>
+        /// 指定名のマテリアルを取得または作成します。
+        /// </summary>
         private static Material CreateMaterial(string name, Color color)
         {
             string path = $"Assets/Materials/{name}.mat";
